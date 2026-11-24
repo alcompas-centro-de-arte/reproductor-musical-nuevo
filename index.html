@@ -1,131 +1,53 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ALCOMPÁS · Centro de Arte</title>
-
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
+    * { box-sizing: border-box; }
     body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: Arial, sans-serif;
-      background: #f3f1ed;
-      color: #292d32;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
+      margin: 0; min-height: 100vh; font-family: Arial, sans-serif;
+      background: #f3f1ed; color: #292d32; display: flex;
+      justify-content: center; align-items: center; padding: 20px;
     }
-
     .player {
-      width: 100%;
-      max-width: 430px;
-      background: white;
-      border-radius: 22px;
-      padding: 30px 22px;
-      text-align: center;
+      width: 100%; max-width: 430px; background: white;
+      border-radius: 22px; padding: 30px 22px; text-align: center;
       box-shadow: 0 8px 30px rgba(0,0,0,0.08);
     }
-
-    .academy {
-      font-size: 23px;
-      font-weight: bold;
-      letter-spacing: 1.5px;
-      color: #435c58;
-    }
-
-    .subtitle {
-      font-size: 13px;
-      color: #858585;
-      margin-top: 5px;
-      margin-bottom: 28px;
-    }
-
-    .music-icon {
-      font-size: 48px;
-      margin-bottom: 12px;
-    }
-
-    h1 {
-      font-size: 22px;
-      margin: 8px 0;
-    }
-
-    .description {
-      color: #888;
-      font-size: 14px;
-      margin-bottom: 25px;
-    }
-
-    audio {
-      width: 100%;
-      margin-bottom: 22px;
-    }
-
-    .speed-title {
-      font-size: 14px;
-      font-weight: bold;
-      margin-bottom: 13px;
-    }
-
-    .speeds {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-    }
-
+    .academy { font-size: 23px; font-weight: bold; letter-spacing: 1.5px; color: #435c58; }
+    .subtitle { font-size: 13px; color: #858585; margin-top: 5px; margin-bottom: 28px; }
+    .music-icon { font-size: 48px; margin-bottom: 12px; }
+    h1 { font-size: 22px; margin: 8px 0; }
+    .description { color: #888; font-size: 14px; margin-bottom: 25px; }
+    audio { width: 100%; margin-bottom: 22px; }
+    .speed-title { font-size: 14px; font-weight: bold; margin-bottom: 13px; }
+    .speeds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .speeds button {
-      border: 1px solid #d8dfdc;
-      background: #f5f7f6;
-      color: #435c58;
-      border-radius: 12px;
-      padding: 13px 5px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
+      border: 1px solid #d8dfdc; background: #f5f7f6; color: #435c58;
+      border-radius: 12px; padding: 13px 5px; font-size: 16px;
+      font-weight: bold; cursor: pointer;
     }
-
-    .speeds button.active {
-      background: #435c58;
-      color: white;
-      border-color: #435c58;
-    }
-
-    .footer {
-      margin-top: 28px;
-      font-size: 12px;
-      color: #999;
-    }
+    .speeds button.active { background: #435c58; color: white; border-color: #435c58; }
+    .footer { margin-top: 28px; font-size: 12px; color: #999; }
   </style>
 </head>
-
 <body>
-
   <main class="player">
-
     <div class="academy">ALCOMPÁS</div>
     <div class="subtitle">Centro de Arte</div>
-
     <div class="music-icon">♫</div>
-
     <h1>Canción 1 · Donatello</h1>
-
-    <div class="description">
-      Material de práctica musical
-    </div>
+    <div class="description">Material de práctica musical</div>
 
     <audio id="audio" controls preload="metadata">
-      <source src="donatello-01.mp3" type="audio/mpeg">
+      <source src="./Donatello-1.mp3" type="audio/mpeg">
       Tu navegador no puede reproducir este audio.
     </audio>
 
     <div class="speed-title">Velocidad de reproducción</div>
-
     <div class="speeds">
       <button data-speed="0.7">70 %</button>
       <button data-speed="0.8">80 %</button>
@@ -134,30 +56,74 @@
       <button data-speed="1.1">110 %</button>
       <button data-speed="1.2">120 %</button>
     </div>
-
-    <div class="footer">
-      ALCOMPÁS · Centro de Arte
-    </div>
-
+    <div class="footer">ALCOMPÁS · Centro de Arte</div>
   </main>
 
-  <script>
+  <script type="module">
     const audio = document.getElementById("audio");
     const buttons = document.querySelectorAll(".speeds button");
+
+    let audioContext;
+    let soundTouchNode;
+    let initialized = false;
+
+    async function initializeAudio() {
+      if (initialized) return;
+
+      const { SoundTouchNode } = await import(
+        "https://esm.sh/@soundtouchjs/audio-worklet@2.1.1"
+      );
+
+      audioContext = new AudioContext();
+
+      await SoundTouchNode.register(
+        audioContext,
+        "./soundtouch-processor.js"
+      );
+
+      soundTouchNode = new SoundTouchNode({
+        context: audioContext
+      });
+
+      const source = audioContext.createMediaElementSource(audio);
+      source.connect(soundTouchNode);
+      soundTouchNode.connect(audioContext.destination);
+
+      initialized = true;
+    }
+
+    audio.addEventListener("play", async () => {
+      try {
+        await initializeAudio();
+        await audioContext.resume();
+
+        const activeButton = document.querySelector(
+          ".speeds button.active"
+        );
+
+        const speed = Number(activeButton.dataset.speed);
+        soundTouchNode.playbackRate.value = speed;
+        soundTouchNode.pitch.value = 1;
+
+      } catch (error) {
+        console.error(error);
+        alert("No se ha podido activar el procesamiento de audio. Comprueba tu conexión a Internet y vuelve a intentarlo.");
+      }
+    });
 
     buttons.forEach(button => {
       button.addEventListener("click", () => {
         const speed = Number(button.dataset.speed);
-        audio.playbackRate = speed;
 
-        buttons.forEach(item => {
-          item.classList.remove("active");
-        });
-
+        buttons.forEach(item => item.classList.remove("active"));
         button.classList.add("active");
+
+        if (initialized) {
+          soundTouchNode.playbackRate.value = speed;
+          soundTouchNode.pitch.value = 1;
+        }
       });
     });
   </script>
-
 </body>
 </html>
