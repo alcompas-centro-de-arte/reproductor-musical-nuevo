@@ -1,9 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ALCOMPÁS · Canción 1</title>
+
 <style>
 body {
   font-family: Arial, sans-serif;
@@ -46,8 +48,13 @@ button.active {
   margin-top: 25px;
   color: #64776d;
 }
+#status {
+  color: #78877e;
+  font-size: 13px;
+}
 </style>
 </head>
+
 <body>
 <main>
 <h1>ALCOMPÁS</h1>
@@ -62,6 +69,7 @@ button.active {
 </audio>
 
 <p>Velocidad de reproducción</p>
+
 <div class="speeds">
   <button onclick="speed(0.7,this)">70%</button>
   <button onclick="speed(0.8,this)">80%</button>
@@ -71,17 +79,101 @@ button.active {
   <button onclick="speed(1.2,this)">120%</button>
 </div>
 
+<p id="status">Preparado para reproducir</p>
+
 <a class="back" href="../">← Volver a las canciones</a>
 </main>
 
-<script>
-const audio = document.getElementById("audio");
+<script type="module">
+import { SoundTouchNode } from
+"https://esm.sh/@soundtouchjs/audio-worklet@2.1.1";
 
-function speed(value, button) {
-  audio.playbackRate = value;
-  document.querySelectorAll("button").forEach(b => b.classList.remove("active"));
-  button.classList.add("active");
+const audio = document.getElementById("audio");
+const status = document.getElementById("status");
+
+let audioContext;
+let soundTouchNode;
+let sourceNode;
+let ready = false;
+let initializing = false;
+
+async function initializeAudio() {
+  if (ready) return;
+
+  if (initializing) return;
+  initializing = true;
+
+  try {
+    audioContext = new AudioContext();
+
+    await audioContext.resume();
+
+    await SoundTouchNode.register(
+      audioContext,
+      "../../../soundtouch-processor.js"
+    );
+
+    soundTouchNode = new SoundTouchNode({
+      context: audioContext
+    });
+
+    sourceNode = audioContext.createMediaElementSource(audio);
+
+    sourceNode.connect(soundTouchNode);
+    soundTouchNode.connect(audioContext.destination);
+
+    audio.preservesPitch = false;
+    soundTouchNode.pitch.value = 1;
+
+    ready = true;
+    status.textContent = "Procesamiento de audio activado";
+
+  } catch (error) {
+    console.error(error);
+
+    if (sourceNode) {
+      sourceNode.disconnect();
+      sourceNode.connect(audioContext.destination);
+      audio.preservesPitch = true;
+    }
+
+    status.textContent =
+      "No se pudo activar el procesamiento. Se intentará la reproducción normal.";
+
+    ready = false;
+  } finally {
+    initializing = false;
+  }
 }
+
+audio.addEventListener("play", async () => {
+  if (!ready) {
+    audio.pause();
+    await initializeAudio();
+
+    if (ready) {
+      audio.play();
+    } else if (sourceNode) {
+      audio.play();
+    }
+  } else if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
+});
+
+window.speed = function(value, button) {
+  audio.playbackRate = value;
+
+  if (soundTouchNode && ready) {
+    soundTouchNode.playbackRate.value = value;
+  }
+
+  document.querySelectorAll(".speeds button").forEach(b => {
+    b.classList.remove("active");
+  });
+
+  button.classList.add("active");
+};
 </script>
 </body>
 </html>
