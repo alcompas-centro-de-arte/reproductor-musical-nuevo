@@ -78,8 +78,98 @@ button.active {
 <script>
 const audio = document.getElementById("audio");
 
+let audioContext;
+let source;
+let processor;
+let workletReady = false;
+let setupPromise = null;
+let currentSpeed = 1;
+
+async function setupSoundTouch() {
+  audioContext = new AudioContext();
+  source = audioContext.createMediaElementSource(audio);
+
+  try {
+    await audioContext.audioWorklet.addModule(
+      "../../../soundtouch-processor.js"
+    );
+
+    processor = new AudioWorkletNode(
+      audioContext,
+      "soundtouch-processor",
+      {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [2],
+        channelCount: 2,
+        channelCountMode: "max"
+      }
+    );
+
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    workletReady = true;
+    audio.playbackRate = 1;
+    applySpeed(currentSpeed);
+
+  } catch (error) {
+    source.connect(audioContext.destination);
+    audio.playbackRate = currentSpeed;
+  }
+
+  await audioContext.resume();
+}
+
+audio.addEventListener("play", async () => {
+  if (workletReady) {
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+    return;
+  }
+
+  if (setupPromise) {
+    await setupPromise;
+    return;
+  }
+
+  audio.pause();
+
+  setupPromise = (async () => {
+    try {
+      await setupSoundTouch();
+    } catch (error) {
+      console.error("SoundTouch:", error);
+      if (source && audioContext) {
+        try {
+          source.connect(audioContext.destination);
+        } catch (e) {}
+      }
+      audio.playbackRate = currentSpeed;
+    }
+
+    audio.play();
+  })();
+
+  await setupPromise;
+});
+
+function applySpeed(value) {
+  if (workletReady && processor) {
+    const parameter = processor.parameters.get("playbackRate");
+
+    if (parameter) {
+      parameter.setValueAtTime(value, audioContext.currentTime);
+    }
+  } else {
+    audio.playbackRate = value;
+  }
+}
+
 function speed(value, button) {
-  audio.playbackRate = value;
+  currentSpeed = value;
+  applySpeed(value);
 
   document.querySelectorAll(".speeds button").forEach(b => {
     b.classList.remove("active");
